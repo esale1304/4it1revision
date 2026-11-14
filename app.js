@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var L=window.LESSONS, C=window.CONTENTS, SUB=window.SUBTOPICS, app=document.getElementById("app");
+var L=window.LESSONS, C=window.CONTENTS, SUB=window.SUBTOPICS, SPEC=window.SPEC, LS=window.LESSON_SPEC, app=document.getElementById("app");
 var KEY="ict4it1.lessons.v1", mem=null;
 
 /* ---------- storage ---------- */
@@ -75,19 +75,63 @@ function mastery(l){
 /* ---------- router ---------- */
 function route(){
   var p=(location.hash||"#/").replace(/^#\/?/,"").split("/");
-  document.querySelectorAll("nav a").forEach(function(a){a.setAttribute("aria-current","page");});
+  var cur=p[0]==="lessons"||p[0]==="lesson"?"lessons":"spec";
+  document.querySelectorAll("nav a").forEach(function(a){if(a.getAttribute("data-r")===cur)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
   if(p[0]==="lesson"&&lesson(p[1])) viewLesson(lesson(p[1]),p[2]||"learn",p[3]);
+  else if(p[0]==="spec"&&(p[1]==="all"||specSec(p[1]))) viewSection(p[1],p[2]||"overview");
+  else if(p[0]==="lessons") viewLessons();
   else viewHome();
+}
+function specSec(id){return SPEC.filter(function(x){return x.id===id;})[0];}
+function secLessons(sid){return L.filter(function(l){return sid==="all"||l.id.slice(0,3)===sid;});}
+function lessonsForPoint(ref){return C.filter(function(c){return (LS[c[0]]||[]).indexOf(ref)>=0;}).map(function(c){return c[0];});}
+function lessonChip(id){
+  var l=lesson(id);
+  return l?h("a",{class:"pill",href:"#/lesson/"+id+"/learn",style:"text-decoration:none"},"Lesson "+id):h("span",{class:"pill",style:"background:#eef1f5;color:#6b7385"},"Lesson "+id+" (soon)");
 }
 window.addEventListener("hashchange",route);
 
-/* ---------- Home ---------- */
+/* ---------- Home: organised by specification ---------- */
 function viewHome(){
   document.title="4IT1 Revise: Topic 1 Digital Devices";
-  var wrap=h("div"),built=L.length;
+  var wrap=h("div");
   wrap.appendChild(h("p",{class:"kicker"},"Edexcel International GCSE ICT (4IT1) · Paper 1"));
   wrap.appendChild(h("h1",null,"Topic 1: Digital Devices"));
-  wrap.appendChild(h("p",{class:"lead"},"Revise lesson by lesson. Each lesson has notes, practice with model answers, retrieval practice, a printable knowledge organiser, puzzles and a mind map."));
+  wrap.appendChild(h("p",{class:"lead"},"Revise by specification section. Use the reference codes (for example 1.3.3) to match each part of the course to the exam specification. Open a section to review all of its notes, questions, flashcards and mind map in one place."));
+  var total=C.length,ready=L.length;
+  wrap.appendChild(h("div",{class:"row",style:"margin:14px 0"},
+    btnLink("#/spec/all/cards","Flashcards for all ready lessons"),
+    btnLink("#/spec/all/map","Mind map of Topic 1",true),
+    btnLink("#/lessons","Browse by lesson",true)));
+  wrap.appendChild(h("div",{class:"callout tip"},h("b",null,"Preview"),ready+" of "+total+" lessons are ready so far. Sections marked 'coming soon' will fill in as lessons are added."));
+  SPEC.forEach(function(sec){
+    var ls=secLessons(sec.id),all=C.filter(function(c){return c[0].slice(0,3)===sec.id;});
+    var card=h("div",{class:"card",style:"margin:14px 0"});
+    card.appendChild(h("div",{class:"row",style:"justify-content:space-between;align-items:flex-start"},
+      h("div",null,h("span",{class:"kicker"},"Section "+sec.id),h("h2",{style:"margin:2px 0 4px"},sec.title)),
+      h("span",{class:"badge "+(ls.length===all.length?"s":ls.length?"d":"r")},ls.length+" of "+all.length+" lessons ready")));
+    card.appendChild(h("p",{class:"small",style:"margin:0 0 8px"},sec.intro));
+    var ul=h("ul",{style:"list-style:none;padding:0;margin:8px 0"});
+    sec.points.forEach(function(pt){
+      ul.appendChild(h("li",{style:"padding:8px 0;border-top:1px solid var(--line)"},
+        h("div",null,h("strong",{style:"color:var(--teal-d)"},pt[0]+" "),pt[1]),
+        h("div",{style:"margin-top:4px"},lessonsForPoint(pt[0]).map(lessonChip))));
+    });
+    card.appendChild(ul);
+    card.appendChild(h("div",{class:"row"},ls.length?btnLink("#/spec/"+sec.id+"/overview","Review section "+sec.id):h("span",{class:"small"},"Review tools arrive with the first lesson in this section.")));
+    wrap.appendChild(card);
+  });
+  wrap.appendChild(h("p",{style:"margin-top:22px"},h("button",{class:"btn bad",onclick:function(){
+    if(confirm("Clear all saved progress on this device?")){mem={q:{},cards:{},cloze:{},brain:{}};save();viewHome();}}},"Reset my progress")));
+  show(wrap);
+}
+/* ---------- Home ---------- */
+function viewLessons(){
+  document.title="4IT1 Revise: All lessons";
+  var wrap=h("div"),built=L.length;
+  wrap.appendChild(h("p",{class:"kicker"},"Edexcel International GCSE ICT (4IT1) · Paper 1"));
+  wrap.appendChild(h("h1",null,"All lessons, in teaching order"));
+  wrap.appendChild(h("p",{class:"lead"},"Work through the course lesson by lesson. Each lesson shows the specification points it covers. To revise by specification section instead, go to the ",h("a",{href:"#/"},"specification view"),"."));
   wrap.appendChild(h("div",{class:"callout tip"},h("b",null,"Preview"),built+" of "+C.length+" lessons are ready so far. Lessons marked 'coming soon' will be added."));
   Object.keys(SUB).forEach(function(sid){
     wrap.appendChild(h("h2",null,sid+" "+SUB[sid]));
@@ -104,8 +148,85 @@ function viewHome(){
     wrap.appendChild(g);
   });
   wrap.appendChild(h("p",{style:"margin-top:22px"},h("button",{class:"btn bad",onclick:function(){
-    if(confirm("Clear all saved progress on this device?")){mem={q:{},cards:{},cloze:{},brain:{}};save();viewHome();}}},"Reset my progress")));
+    if(confirm("Clear all saved progress on this device?")){mem={q:{},cards:{},cloze:{},brain:{}};save();viewLessons();}}},"Reset my progress")));
   show(wrap);
+}
+
+
+/* ---------- Specification section view ---------- */
+var SECTABS=[["overview","Overview"],["notes","Notes"],["quiz","Questions"],["cards","Flashcards"],["map","Mind map"],["organisers","Organisers"]];
+function vocabTable(l){
+  var tb=h("table",{class:"vt"}),tr=h("tr");tr.appendChild(h("th",{scope:"col"},"Term"));tr.appendChild(h("th",{scope:"col"},"Meaning"));tb.appendChild(h("thead",null,tr));
+  var tbody=h("tbody");l.vocab.forEach(function(v){tbody.appendChild(h("tr",null,h("th",{scope:"row"},v[0]),h("td",null,v[1])));});
+  tb.appendChild(tbody);return h("div",{class:"tw"},tb);
+}
+function viewSection(sid,tab){
+  var all=sid==="all",sec=all?{id:"all",title:"Topic 1: Digital Devices",intro:"Everything that is ready so far across sections 1.1 to 1.8."}:specSec(sid);
+  document.title="4IT1 Revise: "+(all?"Topic 1":"Section "+sid+" "+sec.title);
+  var ls=secLessons(sid),wrap=h("div"),head=h("div",{class:"lh noprint"});
+  head.appendChild(h("div",{class:"row",style:"justify-content:space-between"},h("a",{href:"#/"},"← Specification"),
+    all?null:(function(){var sel=h("select",{"aria-label":"Choose section",onchange:function(){location.hash="#/spec/"+sel.value+"/"+tab;}});
+      SPEC.forEach(function(x){sel.appendChild(h("option",{value:x.id},x.id+" "+x.title));});sel.value=sid;return sel;})()));
+  head.appendChild(h("p",{class:"kicker",style:"margin:12px 0 0"},all?"Whole topic":"Specification section "+sid));
+  head.appendChild(h("h1",null,sec.title));
+  head.appendChild(h("p",{class:"lead",style:"font-size:.98rem;margin-top:0"},sec.intro));
+  var tabs=h("div",{class:"tabs",role:"tablist"});
+  SECTABS.forEach(function(t){tabs.appendChild(h("button",{role:"tab","aria-selected":t[0]===tab,onclick:function(){location.hash="#/spec/"+sid+"/"+t[0];}},t[1]));});
+  head.appendChild(tabs);wrap.appendChild(head);
+  var body=h("div");wrap.appendChild(body);show(wrap);
+  if(!ls.length){body.appendChild(h("div",{class:"callout warn"},h("b",null,"Coming soon"),"No lessons are ready in this section yet."));return;}
+  if(tab==="notes"){
+    ls.forEach(function(l){
+      body.appendChild(h("h2",{style:"border-top:3px solid var(--navy);padding-top:14px"},"Lesson "+l.id+": "+l.title));
+      body.appendChild(h("p",{class:"small"},"Specification: "+(LS[l.id]||[]).join(", ")+" · ",h("a",{href:"#/lesson/"+l.id+"/learn"},"Open the full lesson")));
+      body.appendChild(vocabTable(l));
+      l.learn.forEach(function(sc){body.appendChild(h("h3",null,sc.h));var u=h("ul",{class:"notes"});sc.notes.forEach(function(n){u.appendChild(h("li",{html:fmt(n)}));});body.appendChild(u);});
+      body.appendChild(h("div",{class:"callout warn"},h("b",null,"Exam tip"),l.tip));
+    });
+  } else if(tab==="quiz"){
+    body.appendChild(h("p",{class:"lead",style:"font-size:.98rem"},"Write each answer first, then check it. Your scores are saved with each lesson."));
+    ls.forEach(function(l){
+      body.appendChild(h("h2",{style:"border-top:3px solid var(--navy);padding-top:14px"},"Lesson "+l.id+": "+l.title));
+      body.appendChild(h("h3",null,"Quick checks"));
+      l.practice.kca.forEach(function(q,i){body.appendChild(qcard(l,"ka"+i,{q:(i+1)+". "+q.q,marks:q.marks,a:q.a}));});
+      body.appendChild(h("h3",null,"Exam-style questions"));
+      l.practice.exam.forEach(function(q){body.appendChild(examCard(l,q));});
+    });
+  } else if(tab==="cards"){
+    var items=[];ls.forEach(function(l){items=items.concat(recallItems(l));});
+    cards(body,items,function(){viewSection(sid,"cards");},null);
+  } else if(tab==="map"){
+    var root;
+    if(all) root={t:"Topic 1 Digital Devices",c:SPEC.filter(function(x){return secLessons(x.id).length;}).map(function(x,k){
+      return {t:x.id+" "+x.title,hue:HUES[k%8],c:secLessons(x.id).map(function(l){return {t:l.id+" "+l.title,hue:HUES[k%8],c:l.mind.map(function(m){return toNode(m,HUES[k%8]);})};})};}),hue:-1};
+    else root={t:sec.id+" "+sec.title,c:ls.map(function(l,k){return {t:l.id+" "+l.title,hue:HUES[k%8],c:l.mind.map(function(m){return toNode(m,HUES[k%8]);})};}),hue:-1};
+    mindmap(body,root);
+  } else if(tab==="organisers"){
+    body.appendChild(h("div",{class:"row noprint",style:"margin-bottom:12px"},h("button",{class:"btn",onclick:function(){try{window.print();}catch(e){}}},"Print these organisers"),
+      h("span",{class:"noprint-note"},"If the print button does nothing, use your browser's print option (Ctrl+P or Cmd+P).")));
+    ls.forEach(function(l){tabOrganiser(body,l,true);});
+  } else {
+    if(all){
+      var g=h("div",{class:"grid"});
+      SPEC.forEach(function(x){var n=secLessons(x.id).length,m=C.filter(function(c){return c[0].slice(0,3)===x.id;}).length;
+        g.appendChild(n?h("a",{class:"card",href:"#/spec/"+x.id+"/overview"},h("span",{class:"kicker"},"Section "+x.id),h("h3",null,x.title),h("div",{class:"small"},n+" of "+m+" lessons ready")):
+          h("div",{class:"card soon"},h("span",{class:"kicker"},"Section "+x.id),h("h3",null,x.title),h("div",{class:"small"},"Coming soon")));});
+      body.appendChild(g);
+    } else {
+      var tb=h("table"),hr=h("tr");["Ref","What you need to know","Lessons"].forEach(function(t){hr.appendChild(h("th",{scope:"col"},t));});tb.appendChild(h("thead",null,hr));
+      var tbd=h("tbody");sec.points.forEach(function(pt){tbd.appendChild(h("tr",null,h("th",{scope:"row",style:"white-space:nowrap"},pt[0]),h("td",null,pt[1]),h("td",null,lessonsForPoint(pt[0]).map(lessonChip))));});
+      tb.appendChild(tbd);body.appendChild(h("div",{class:"tw"},tb));
+      body.appendChild(h("h2",null,"Lessons in this section"));
+      var g2=h("div",{class:"grid lessonlist"});
+      C.filter(function(c){return c[0].slice(0,3)===sid;}).forEach(function(c){var l=lesson(c[0]);
+        if(!l){g2.appendChild(h("div",{class:"card soon"},h("span",{class:"kicker"},"Lesson "+c[0]),h("h3",null,c[1]),h("div",{class:"small"},"Coming soon")));return;}
+        var st=lessonStats(l);
+        g2.appendChild(h("a",{class:"card",href:"#/lesson/"+l.id+"/learn"},h("span",{class:"kicker"},"Lesson "+l.id),h("h3",null,l.title),
+          h("div",{class:"small"},"Practice: "+st.done+" of "+st.total+" questions"),meter(pct(st.done,st.total),"d")));});
+      body.appendChild(g2);
+      body.appendChild(h("p",{class:"small",style:"margin-top:14px"},"Spec points are summarised here. Always check the official Pearson Edexcel International GCSE ICT (4IT1) specification for the exact wording."));
+    }
+  }
 }
 
 /* ---------- Lesson shell ---------- */
@@ -116,9 +237,10 @@ function viewLesson(l,tab,sub){
   var sel=h("select",{"aria-label":"Choose lesson",onchange:function(){location.hash="#/lesson/"+sel.value+"/"+tab;}});
   C.forEach(function(c){var o=h("option",{value:c[0],disabled:!lesson(c[0])},c[0]+" "+c[1]+(lesson(c[0])?"":" (coming soon)"));sel.appendChild(o);});
   sel.value=l.id;
-  head.appendChild(h("div",{class:"row",style:"justify-content:space-between"},h("a",{href:"#/"},"← All lessons"),sel));
+  head.appendChild(h("div",{class:"row",style:"justify-content:space-between"},h("a",{href:"#/"},"← Specification"),sel));
   head.appendChild(h("p",{class:"kicker",style:"margin:12px 0 0"},"Lesson "+l.id+" · about "+l.minutes+" minutes"));
   head.appendChild(h("h1",null,l.title));
+  head.appendChild(h("p",{class:"small",style:"margin:0 0 6px"},"Specification: ",(LS[l.id]||[]).map(function(r){return h("a",{href:"#/spec/"+r.slice(0,3)+"/overview",style:"margin-right:10px;font-weight:600"},r);})));
   var tabs=h("div",{class:"tabs",role:"tablist"});
   TABS.forEach(function(t){tabs.appendChild(h("button",{role:"tab","aria-selected":t[0]===tab,onclick:function(){location.hash="#/lesson/"+l.id+"/"+t[0];}},t[1]));});
   head.appendChild(tabs);
@@ -253,10 +375,10 @@ function tabRecall(body,l,sub){
     tabs.appendChild(h("button",{class:"chip","aria-pressed":x[0]===sub,onclick:function(){location.hash="#/lesson/"+l.id+"/recall/"+x[0];}},x[1]));});
   body.appendChild(tabs);
   var b=h("div");body.appendChild(b);
-  if(sub==="recap") recap(b,l); else if(sub==="cloze") cloze(b,l); else if(sub==="brain") brain(b,l); else cards(b,l);
+  if(sub==="recap") recap(b,l); else if(sub==="cloze") cloze(b,l); else if(sub==="brain") brain(b,l); else cards(b,recallItems(l),function(){viewLesson(l,"recall","cards");},["#/lesson/"+l.id+"/recall/cloze","Fill the gaps"]);
 }
-function cards(body,l){
-  var st=load(),all=recallItems(l),now=Date.now();
+function cards(body,all,restart,nextLink){
+  var st=load(),now=Date.now();
   var queue=shuffle(all.filter(function(c){var s=st.cards[c.key];return !s||s.due<=now;})),idx=0;
   var mastered=all.filter(function(c){var s=st.cards[c.key];return s&&s.box>=3;}).length;
   var info=h("p",{class:"small"}),stage=h("div");body.appendChild(info);body.appendChild(stage);
@@ -266,7 +388,7 @@ function cards(body,l){
     if(!queue.length){stage.appendChild(h("div",{class:"card"},h("h3",null,"Nothing due right now"),h("p",null,"You have seen every card recently. Cards return later, depending on how well you knew them."),
       h("button",{class:"btn",onclick:function(){queue=shuffle(all);idx=0;step();}},"Practise all cards anyway")));return;}
     if(idx>=queue.length){stage.appendChild(h("div",{class:"card"},h("h3",null,"Session complete"),h("p",null,"Cards you missed will come back soon. Cards you knew come back after a longer gap."),
-      h("div",{class:"row"},h("button",{class:"btn",onclick:function(){viewLesson(l,"recall","cards");}},"New session"),btnLink("#/lesson/"+l.id+"/recall/cloze","Fill the gaps",true))));return;}
+      h("div",{class:"row"},h("button",{class:"btn",onclick:restart},"New session"),nextLink?btnLink(nextLink[0],nextLink[1],true):null)));return;}
     var c=queue[idx],fc=h("div",{class:"fc"});
     fc.appendChild(h("button",{class:"face",onclick:flip,"aria-label":"Show answer"},h("span",{class:"small"},c.term?"Key term":"Question"),h("span",null,c.term?"What is meant by “"+c.q+"”?":c.q),h("span",{class:"hint"},"Say your answer, then tap to reveal")));
     stage.appendChild(fc);
@@ -332,8 +454,8 @@ function brain(body,l){
 }
 
 /* ---------- Organiser ---------- */
-function tabOrganiser(body,l){
-  body.appendChild(h("div",{class:"row noprint",style:"margin-bottom:12px"},
+function tabOrganiser(body,l,noBtn){
+  if(!noBtn) body.appendChild(h("div",{class:"row noprint",style:"margin-bottom:12px"},
     h("button",{class:"btn",onclick:function(){try{window.print();}catch(e){}}},"Print this organiser"),
     h("span",{class:"noprint-note"},"If the print button does nothing, use your browser's print option (Ctrl+P or Cmd+P).")));
   var o=h("div",{class:"org"});
@@ -350,7 +472,7 @@ function tabOrganiser(body,l){
   tb.appendChild(tbody);c2.appendChild(tb);
   c2.appendChild(h("h3",null,"Exam tip"));c2.appendChild(h("p",{style:"font-size:.93rem;margin:.2em 0"},l.tip));
   c2.appendChild(h("h3",null,"Think about it"));c2.appendChild(h("p",{style:"font-size:.93rem;margin:.2em 0"},l.think));
-  cols.appendChild(c1);cols.appendChild(c2);o.appendChild(cols);body.appendChild(o);
+  cols.appendChild(c1);cols.appendChild(c2);o.appendChild(cols);o.style.marginBottom="16px";body.appendChild(o);
 }
 
 /* ---------- Puzzles ---------- */
@@ -479,8 +601,10 @@ var HUES=[172,215,32,285,350,95,48,200];
 function toNode(x,hue){return typeof x==="string"?{t:x,c:[],hue:hue}:{t:x.t,c:x.c.map(function(y){return toNode(y,hue);}),hue:hue};}
 function wrapText(s,max){var w=s.split(" "),lines=[],cur="";w.forEach(function(x){if((cur+" "+x).trim().length>max&&cur){lines.push(cur);cur=x;}else cur=(cur+" "+x).trim();});if(cur)lines.push(cur);return lines;}
 function tabMap(body,l){
+  mindmap(body,{t:l.title,c:l.mind.map(function(m,j){return toNode(m,HUES[j%HUES.length]);}),hue:-1});
+}
+function mindmap(body,root){
   body.appendChild(h("p",{class:"lead",style:"font-size:.98rem"},"Click or press Enter on a branch to open or close it. Try covering the map and drawing it from memory."));
-  var root={t:l.title,c:l.mind.map(function(m,j){return toNode(m,HUES[j%HUES.length]);}),hue:-1};
   var uid=0;(function ids(n){n.id=uid++;n.c.forEach(ids);})(root);
   function setOpen(n,d,maxd){n.open=d<maxd;n.c.forEach(function(c){setOpen(c,d+1,maxd);});}
   function setAll(n,v){n.open=v;n.c.forEach(function(c){setAll(c,v);});}
